@@ -1,0 +1,68 @@
+---
+title: "analyses"
+format: html
+editor: visual
+---
+
+## Load data
+
+```{r}
+library(tidyverse)
+data = read_csv('../Data/pilot_data.csv')
+
+#mouse3 --> dicrimination resp
+
+#mouse3.corr --> discrimination accuracy
+#mouse_4 --> test response after first training (in test_corr loop)
+#mouse_4 --> test response after second training (in test_corr2 loop)
+#mouse_4 --> test response after second training (in test_corr3 loop)
+#mouse --> identification resp
+
+data$mouse_phase <- dplyr::case_when(
+  !is.na(data$`test_corr.thisTrialN`)  ~ "testcorr",
+  !is.na(data$`test_corr2.thisTrialN`) ~ "testcorr2",
+  !is.na(data$`test_corr3.thisTrialN`) ~ "testcorr3",
+  !is.na(data$`discrimination.thisTrialN`) ~ "discrimination",
+  !is.na(data$`ident.thisTrialN`) ~ "identification",
+  !is.na(data$`trials.thisN`) ~ "training",
+  !is.na(data$`train2.thisN`) ~ "training2",
+  !is.na(data$`train3.thisN`) ~ "training3",
+  TRUE ~ NA_character_
+)
+
+
+data_filtered = data %>%
+  select(participant, date, mouse_3.clicked_name, mouse_3.x, mouse_3.y, mouse_3.corr, mouse.clicked_name, mouse_4.clicked_name, mouse_phase, Picture1, Picture2, TestPicture1, TestPicture2, Sound, Sound1) %>%
+  mutate(Sound = coalesce(Sound, Sound1)) %>%
+  mutate(Picture1 = coalesce(Picture1, TestPicture1)) %>%
+  mutate(Picture2 = coalesce(Picture2, TestPicture2)) %>%
+  mutate(resp = coalesce(mouse_3.clicked_name, mouse.clicked_name, mouse_4.clicked_name)) %>%
+  mutate(resp = case_when(
+    str_detect(resp, "textbox_8") ~ "wrong",
+    str_detect(resp, "textbox_7") ~ "correct",
+    TRUE ~ resp
+)) %>%
+  
+  select(-Sound1, -TestPicture1, -TestPicture2, -mouse_3.clicked_name, -mouse.clicked_name, -mouse_4.clicked_name) %>%
+  mutate(condition = case_when(
+    "LoudnessManipulation" %in% Sound ~ 'Loudness',
+    "PitchManipulation" %in% Sound ~ 'Pitch',
+    .default = 'F0'
+  ))
+
+data_test = data_filtered %>%
+  select(participant, date)
+
+```
+
+We should filter out data after 11/26/2025
+
+```{r}
+data_test$date = as.Date(data_test$date)
+
+cutoff = ymd("2025-11-25")
+
+data_filtered = data_test %>%
+  filter(date > cutoff)
+```
+
