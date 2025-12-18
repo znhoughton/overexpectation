@@ -619,6 +619,21 @@ library(forcats)
 library(stringr)
 library(scales)
 
+pitch_map <- tibble(
+  Sound = c(
+    "bp_190_25.wav",
+    "bp_215_25.wav",
+    "bp_240_25.wav",
+    "bp_290_25.wav"
+  ),
+  pitch_cat = c(
+    "Low",
+    "Medium",
+    "High",
+    "Superhigh"
+  )
+)
+
 data_testcorrs_clean <- data_testcorrs %>%
   mutate(
     across(where(is.character), ~ na_if(.x, "[null]")),
@@ -672,27 +687,15 @@ condition_labs <- c(
 )
 
 # University of Oregon colors
+uo_green  <- "#154734"  # UO Green
+uo_yellow <- "#FEE123"  # UO Yellow
+uo_gray   <- "#C4C4C4"
 uo_yellow_low   <- "#FFE066"  # Low (noticeably yellow, readable)
 uo_yellow_med   <- "#F5C400"  # Medium (gold / darker yellow)
 uo_green_light  <- "#6BAF92"  # High (light green)
 uo_green_dark   <- "#154734"  # Superhigh (UO green)
 
 
-
-pitch_map <- tibble(
-  Sound = c(
-    "bp_190_25.wav",
-    "bp_215_25.wav",
-    "bp_240_25.wav",
-    "bp_290_25.wav"
-  ),
-  pitch_cat = c(
-    "Low",
-    "Medium",
-    "High",
-    "Superhigh"
-  )
-)
 
 
 plot_accuracy_props_grid <- function(df, choices, stages = NULL) {
