@@ -9,8 +9,13 @@ editor: visual
 ```{r}
 library(tidyverse)
 library(brms)
-data = read_csv('../Data/pilot_data3.csv')
+#data = read_csv('../Data/pilot_data3.csv')
 
+uo_data = read_csv('../Data/uo-data.csv')
+ucd_data = read_csv('../Data/ucd-data.csv')
+
+data = uo_data %>%
+  full_join(ucd_data)
 #mouse3 --> dicrimination resp
 
 #mouse3.corr --> discrimination accuracy
@@ -33,7 +38,7 @@ data$mouse_phase <- dplyr::case_when(
 
 
 data_filtered = data %>%
-  select(participant, date, mouse_3.clicked_name, mouse_3.x, mouse_3.y, mouse_3.corr, mouse.clicked_name, mouse_4.clicked_name, mouse_phase, Picture1, Picture2, TestPicture1, TestPicture2, Sound, Sound1) %>%
+  select(participant, date, mouse_3.clicked_name, mouse_3.x, mouse_3.y, mouse_3.corr, mouse.clicked_name, mouse_4.clicked_name, mouse_phase, Picture1, Picture2, TestPicture1, TestPicture2, Sound, Sound1, sizeScalar) %>%
   mutate(Sound = coalesce(Sound, Sound1)) %>%
   mutate(Picture1 = coalesce(Picture1, TestPicture1)) %>%
   mutate(Picture2 = coalesce(Picture2, TestPicture2)) %>%
@@ -43,35 +48,37 @@ data_filtered = data %>%
     str_detect(resp, "textbox_7") ~ "correct",
     TRUE ~ resp
 )) %>%
-  select(-Sound1, -TestPicture1, -TestPicture2, -mouse_3.clicked_name, -mouse.clicked_name, -mouse_4.clicked_name) %>%
+  select(-Sound1, -TestPicture1, -TestPicture2) %>%
   mutate(condition = case_when(
     str_detect(Sound, "LoudnessManipulation") ~ 'Loudness',
     str_detect(Sound, "PitchManipulation") ~ 'Pitch',
     .default = 'F0'
   ))
 
-data_filtered = data_filtered %>%
-  mutate(trial_type = case_when(
-    Picture1 == "A.PNG" & Picture2 == "A.PNG" ~ "AA",
-    Picture1 == "A.PNG" | Picture2 == "A.PNG" ~ "A",
-    is.na(Picture1) | is.na(Picture2) ~ NA_character_,
-    TRUE ~ "No A"
-  ))
+# data_filtered = data_filtered %>%
+#   mutate(trial_type = case_when(
+#     Picture1 == "A.PNG" & Picture2 == "A.PNG" ~ "AA",
+#     Picture1 == "A.PNG" | Picture2 == "A.PNG" ~ "A",
+#     is.na(Picture1) | is.na(Picture2) ~ NA_character_,
+#     TRUE ~ "No A"
+#   ))
 
-data_test = data_filtered %>%
-  select(participant, date)
 
 ```
 
-We should filter out data after 11/26/2025
+We should filter out data before 2/4/2026
+
+(between 1/15 and 2/4 are the first round of results, which did not have the size differences in stage 3)
 
 ```{r}
-# data_test$date = as.Date(data_test$date)
-# 
-# cutoff = ymd("2025-11-25")
-# 
-# data_filtered = data_test %>%
-#   filter(date > cutoff)
+data_filtered$date = as.Date(data_filtered$date)
+
+cutoff = ymd("2026-02-04")
+
+data_filtered = data_filtered %>%
+  filter(date > cutoff)
+
+data_filtered$sizeScalar = factor(data_filtered$sizeScalar)
 ```
 # TestCorr vs TestCorr1 vs TestCorr2
 
@@ -128,48 +135,51 @@ data_testcorrs_pitch = data_testcorrs_pitch %>%
 data_testcorrs_pitch$resp = factor(data_testcorrs_pitch$resp)
 
 m1_f0 = brm(
-  resp ~ Sound * trial_type * mouse_phase + (1|participant),
+  resp ~ sizeScalar * Sound * mouse_phase + (1|participant),
   data = data_testcorrs_f0,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 m1_loudness = brm(
-  resp ~ Sound * trial_type * mouse_phase + (1|participant),
+  resp ~ sizeScalar * Sound * mouse_phase + (1|participant),
   data = data_testcorrs_loudness,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 m1_pitch = brm(
-  resp ~ Sound * trial_type * mouse_phase + (1|participant),
+  resp ~ sizeScalar * Sound * mouse_phase + (1|participant),
   data = data_testcorrs_pitch,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 uo_green  <- "#154734"  # UO Green
@@ -179,7 +189,7 @@ uo_gray   <- "#C4C4C4"
 
 ce <- conditional_effects(
   m1_f0,
-  effects = "Sound:trial_type",
+  effects = "Sound:sizeScalar",
   conditions = data.frame(
     mouse_phase = unique(data_testcorrs_f0$mouse_phase)
   )
@@ -187,7 +197,7 @@ ce <- conditional_effects(
 
 ce_loudness <- conditional_effects(
   m1_loudness,
-  effects = "Sound:trial_type",
+  effects = "Sound:sizeScalar",
   conditions = data.frame(
     mouse_phase = unique(data_testcorrs_f0$mouse_phase)
   )
@@ -196,35 +206,38 @@ ce_loudness <- conditional_effects(
 
 ce_pitch <- conditional_effects(
   m1_pitch,
-  effects = "Sound:trial_type",
+  effects = "Sound:sizeScalar",
   conditions = data.frame(
     mouse_phase = unique(data_testcorrs_f0$mouse_phase)
   )
 )
 
 
+
 p <- plot(ce, plot = FALSE)[[1]] +
   theme_bw(base_size = 16) +
   scale_color_manual(
     values = c(
-      "A" = uo_green,
-      "B" = uo_yellow
+      "1" = uo_green,
+      "2" = uo_yellow,
+      "3" = "#4C9F70",
+      "4" = "#C99700"
     )
   ) +
   scale_fill_manual(
     values = c(
-      "A" = uo_green,
-      "B" = uo_yellow
+      "1" = uo_green,
+      "2" = uo_yellow,
+      "3" = "#4C9F70",
+      "4" = "#C99700"
     )
   ) +
   theme(
     panel.grid.major = element_line(color = "grey85", linewidth = 0.3),
     panel.grid.minor = element_blank(),
-
     legend.position = "top",
     legend.title = element_text(face = "bold"),
     legend.text = element_text(size = 13),
-
     axis.title = element_text(face = "bold"),
     strip.background = element_rect(fill = uo_green, color = NA),
     strip.text = element_text(color = "white", face = "bold")
@@ -232,10 +245,10 @@ p <- plot(ce, plot = FALSE)[[1]] +
   labs(
     x = "Sound",
     y = "Predicted probability",
-    color = "Trial type",
-    fill  = "Trial type"
+    color = "sizeScalar",
+    fill  = "sizeScalar"
   )
-
+p
 ```
 
 Run analysis on Test2, filter for sounds 240 vs 290 and A vs AA trials (filter out not A trials)
@@ -251,7 +264,6 @@ data_testcorr2_f0 = data_testcorrs %>%
 
 data_testcorr2_f0 = data_testcorr2_f0 %>%
   filter(str_detect(Sound, "240") | str_detect(Sound, "290")) %>%
-  filter(trial_type %in% c("A", "AA")) %>%
   mutate(resp = case_when(
     resp == "correct" ~ 1,
     resp == "wrong" ~ 0,
@@ -264,7 +276,6 @@ data_testcorr_loudness = data_testcorrs %>%
 
 data_testcorr_loudness = data_testcorr_loudness %>%
   filter(str_detect(Sound, "240") | str_detect(Sound, "290")) %>%
-  filter(trial_type %in% c("A", "AA")) %>%
   mutate(resp = case_when(
     resp == "correct" ~ 1,
     resp == "wrong" ~ 0,
@@ -277,7 +288,6 @@ data_testcorr_pitch = data_testcorrs %>%
 
 data_testcorr_pitch = data_testcorr_pitch %>%
   filter(str_detect(Sound, "240") | str_detect(Sound, "290")) %>%
-  filter(trial_type %in% c("A", "AA")) %>%
   mutate(resp = case_when(
     resp == "correct" ~ 1,
     resp == "wrong" ~ 0,
@@ -285,48 +295,51 @@ data_testcorr_pitch = data_testcorr_pitch %>%
   ))
 
 m2_f0 = brm(
-  resp ~ Sound * trial_type + (1 + Sound * trial_type |participant),
+  resp ~ Sound * sizeScalar + (1 + Sound * sizeScalar |participant),
   data = data_testcorr2_f0,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 m2_loudness = brm(
-  resp ~ Sound * trial_type + (1 + Sound * trial_type |participant),
+  resp ~ Sound * sizeScalar + (1 + Sound * sizeScalar |participant),
   data = data_testcorr_loudness,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 m2_pitch = brm(
-  resp ~ Sound * trial_type + (1 + Sound * trial_type |participant),
+  resp ~ Sound * sizeScalar + (1 + Sound * sizeScalar |participant),
   data = data_testcorr_pitch,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 re <- ranef(m2_f0)$participant
@@ -435,7 +448,7 @@ data_testcorr3_f0 = data_testcorrs %>%
 
 data_testcorr3_f0 = data_testcorr3_f0 %>%
   filter(str_detect(Sound, "240") | str_detect(Sound, "290")) %>%
-  filter(trial_type %in% c("A", "AA")) %>%
+  #filter(trial_type %in% c("A", "AA")) %>%
   mutate(resp = case_when(
     resp == "correct" ~ 1,
     resp == "wrong" ~ 0,
@@ -448,7 +461,7 @@ data_testcorr3_loudness = data_testcorrs %>%
 
 data_testcorr3_loudness = data_testcorr3_loudness %>%
   filter(str_detect(Sound, "240") | str_detect(Sound, "290")) %>%
-  filter(trial_type %in% c("A", "AA")) %>%
+  #filter(trial_type %in% c("A", "AA")) %>%
   mutate(resp = case_when(
     resp == "correct" ~ 1,
     resp == "wrong" ~ 0,
@@ -461,7 +474,7 @@ data_testcorr3_pitch = data_testcorrs %>%
 
 data_testcorr3_pitch = data_testcorr3_pitch %>%
   filter(str_detect(Sound, "240") | str_detect(Sound, "290")) %>%
-  filter(trial_type %in% c("A", "AA")) %>%
+  #filter(trial_type %in% c("A", "AA")) %>%
   mutate(resp = case_when(
     resp == "correct" ~ 1,
     resp == "wrong" ~ 0,
@@ -469,48 +482,51 @@ data_testcorr3_pitch = data_testcorr3_pitch %>%
   ))
 
 m2_f03 = brm(
-  resp ~ Sound * trial_type + (1 + Sound * trial_type |participant),
+  resp ~ Sound * sizeScalar + (1 + Sound * sizeScalar |participant),
   data = data_testcorr2_f0,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 m2_loudness3 = brm(
-  resp ~ Sound * trial_type + (1 + Sound * trial_type |participant),
+  resp ~ Sound * sizeScalar + (1 + Sound * sizeScalar |participant),
   data = data_testcorr_loudness,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 m2_pitch3 = brm(
-  resp ~ Sound * trial_type + (1 + Sound * trial_type |participant),
+  resp ~ Sound * sizeScalar + (1 + Sound * sizeScalar |participant),
   data = data_testcorr_pitch,
   family = bernoulli(),
   prior = c(
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "Intercept")
   ),
-  iter = 4000,
-  warmup = 1000,
+  iter = 14000,
+  warmup = 7000,
   chains = 4,
   cores = 4,
-  seed = 123
+  control = list(adapt_delta=0.99, max_treedepth = 15),
+  seed = 42
 )
 
 
@@ -696,19 +712,15 @@ uo_green_light  <- "#6BAF92"  # High (light green)
 uo_green_dark   <- "#154734"  # Superhigh (UO green)
 
 
-
-
 plot_accuracy_props_grid <- function(df, choices, stages = NULL) {
   df %>%
     { if (!is.null(stages))
-        dplyr::filter(., mouse_phase %in% stages)
+        filter(., mouse_phase %in% stages)
       else .
     } %>%
-    mutate(
-      mouse_phase = droplevels(mouse_phase)   # ✅ THIS LINE
-    ) %>%
-    filter(pitch_cat %in% choices & trial_type != "No A") %>%
-    group_by(mouse_phase, condition, trial_type, pitch_cat) %>%
+    mutate(mouse_phase = droplevels(mouse_phase)) %>%
+    filter(pitch_cat %in% choices) %>%
+    group_by(mouse_phase, condition, sizeScalar, pitch_cat) %>%
     summarise(
       n_trials  = n(),
       n_correct = sum(is_correct, na.rm = TRUE),
@@ -717,12 +729,9 @@ plot_accuracy_props_grid <- function(df, choices, stages = NULL) {
     complete(
       mouse_phase,
       condition,
-      trial_type,
+      sizeScalar,
       pitch_cat,
-      fill = list(
-        n_trials  = 0,
-        n_correct = 0
-      )
+      fill = list(n_trials = 0, n_correct = 0)
     ) %>%
     mutate(
       prop_correct = if_else(n_trials > 0, n_correct / n_trials, 0),
@@ -734,53 +743,31 @@ plot_accuracy_props_grid <- function(df, choices, stages = NULL) {
       ci_high = purrr::map_dbl(ci, 2)
     ) %>%
     ggplot(aes(
-      x = trial_type,
+      x = sizeScalar,
       y = prop_correct,
       fill = pitch_cat
     )) +
-    geom_col(
-      position = position_dodge(width = 0.7),
-      width = 0.7
-    ) +
+    geom_col(position = position_dodge(0.7), width = 0.7) +
     geom_errorbar(
       aes(ymin = ci_low, ymax = ci_high),
-      position = position_dodge(width = 0.7),
+      position = position_dodge(0.7),
       width = 0.2,
       linewidth = 0.6
     ) +
     facet_grid(
       mouse_phase ~ condition,
       labeller = labeller(
-        mouse_phase = c("1"="Stage 1","2"="Stage 1","3"="Stage 2"), #confusingly gonna name Stage 2 as stage 1
+        mouse_phase = c("1"="Stage 1","2"="Stage 1","3"="Stage 2"),
         condition   = c("F0"="F0 as Voicing","Loudness"="Loudness","Pitch"="F0 as Pitch")
       )
     ) +
-    scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+    scale_y_continuous(labels = percent, limits = c(0, 1)) +
     scale_fill_manual(
       values = c(
         Low       = uo_yellow_low,
         Medium    = uo_yellow_med,
         High      = uo_green_light,
-        Superhigh = uo_green_dark
-      )
-    )    +
-    theme_bw(base_size = 15) +
-    theme(
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor = element_blank(),
-      legend.position = "top",
-      legend.title = element_text(face = "bold"),
-      strip.background = element_rect(fill = uo_green),
-      strip.text = element_text(color = "white", face = "bold"),
-      axis.title = element_text(face = "bold"),
-      axis.text.x = element_text(angle = 30, hjust = 1)
-    ) +
-    labs(
-      x = "Creature Type",
-      y = "Proportion Chosen",
-      fill = "Sound Category"
-    )
-}
+        Superhigh = uo_gre_
 
 
 
